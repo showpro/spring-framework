@@ -109,6 +109,7 @@ public class GenericApplicationContext extends AbstractApplicationContext implem
 	 * @see #refresh
 	 */
 	public GenericApplicationContext() {
+	    //无参构造方法中，创建spring中的Bean工厂接口（ConfigurableListableBeanFactory）的一个实现类
 		this.beanFactory = new DefaultListableBeanFactory();
 	}
 
@@ -266,6 +267,7 @@ public class GenericApplicationContext extends AbstractApplicationContext implem
 			throw new IllegalStateException(
 					"GenericApplicationContext does not support multiple refresh attempts: just call 'refresh' once");
 		}
+		// 给beanFactory设置序列化id
 		this.beanFactory.setSerializationId(getId());
 	}
 

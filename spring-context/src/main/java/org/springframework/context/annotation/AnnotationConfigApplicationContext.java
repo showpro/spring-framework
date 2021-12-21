@@ -53,17 +53,41 @@ import org.springframework.util.Assert;
  */
 public class AnnotationConfigApplicationContext extends GenericApplicationContext implements AnnotationConfigRegistry {
 
+    /**
+     * 这个类顾名思义是一个reader，一个bd读取器
+     * 读取什么呢？还是顾名思义AnnotatedBeanDefinition意思是读取一个被加了注解的bean，帮你转换成bd
+     * 这个类在构造方法中实例化的
+     */
 	private final AnnotatedBeanDefinitionReader reader;
 
+    /**
+     * 同意顾名思义，这是一个扫描器，扫描一个类，包，并且帮你转换成bd
+     * 同样是在构造方法中被实例化的
+     */
 	private final ClassPathBeanDefinitionScanner scanner;
 
 
 	/**
+     * 调用默认的构造方法时会先执行父类（GenericApplicationContext）的构造方法
+     *
 	 * Create a new AnnotationConfigApplicationContext that needs to be populated
 	 * through {@link #register} calls and then manually {@linkplain #refresh refreshed}.
 	 */
 	public AnnotationConfigApplicationContext() {
+        /**
+         * 先调父类的构造方法：实例化一个BeanFactory工厂：DefaultListableBeanFactory
+         *
+         * 创建一个Bean读取器，用来读取加了注解的Bean定义，
+         * 同时向容器(BeanDefinitionMap)中注册了 7 个spring自带的后置处理器(包括BeanPostProcessor和BeanFactoryPostProcessor)
+         * 这里的注册指的是将这7个类对应的BeanDefinition放入到BeanDefinitionMap中。
+         *
+         * 什么是bean定义（或bean的描述）？即BeanDefinition。BeanDefinition对象来描述spring中bean的信息，类似于Class对象来描述java类的信息
+         *
+         */
+	    // 读取加了注解的bean
+        // this.registerBeanDefinition();
 		this.reader = new AnnotatedBeanDefinitionReader(this);
+		// 会创建一个扫描器，后面似乎并没有用到这个扫描器，在refresh()中使用的是重新new的一个扫描器。
 		this.scanner = new ClassPathBeanDefinitionScanner(this);
 	}
 
@@ -78,14 +102,37 @@ public class AnnotationConfigApplicationContext extends GenericApplicationContex
 	}
 
 	/**
+     * 这个构造方法需要传入一个被java config注解了的配置类
+     * 然后会把这个被注解了java config的类通过注解读取器读取后继而解析
 	 * Create a new AnnotationConfigApplicationContext, deriving bean definitions
 	 * from the given component classes and automatically refreshing the context.
 	 * @param componentClasses one or more component classes &mdash; for example,
 	 * {@link Configuration @Configuration} classes
 	 */
 	public AnnotationConfigApplicationContext(Class<?>... componentClasses) {
-		this();
-		register(componentClasses);
+	    //参数componentClasses 这里代表被加了注解的AppConfig.class配置类
+	    //调用构造方法 ②
+        /**
+         * 等同于
+         * AnnotationConfigApplicationContext ac = new AnnotationConfigApplicationContext();
+         */
+
+        // 是否完成了X Y的扫描？看beanDefinitionMap中是否有X , Y?有，则完成了扫描，否则没有
+
+        // 这里有没有完成定义的包扫描？没有
+        // 这里由于它有父类，故而会先调用父类的构造方法，然后才会调用自己的构造方法
+        // 在自己构造方法中初始一个读取器和扫描器
+	    this();//调用默认的无参的构造方法（java语法是先调用父类的无参构造方法）
+
+        // 注册配置类 ③
+        // 等同于 ac.register(AppConfig.class) 这里为什么要注册配置类到bDMap中？因为配置类中可能有@Bean注解的方法，方法的调用需要bean实例化
+        // 这里有没有完成定义的包扫描？没有
+		register(componentClasses);//最终将bean的描述信息(bd) 和 beanName读取到DefaultListableBeanFactory工厂的bdmap当中
+                                   //register方法主要用来读取加了注解的bean，并把它转换成bean的定义(bd)，注册到工厂的bdmap中。里面是通过reader.register(componentClasses)来完成的
+
+		// 初始化spring容器 ④
+        // 等同于 ac.refresh()
+        // 这一步有没有完成扫描？有
 		refresh();
 	}
 
@@ -147,7 +194,15 @@ public class AnnotationConfigApplicationContext extends GenericApplicationContex
 	// Implementation of AnnotationConfigRegistry
 	//---------------------------------------------------------------------
 
-	/**
+    /**
+     * 注册单个或多个bean给容器
+     * 比如有新加的类可以用这个方法进行注册
+     * 但是注册之后需要手动调用refresh()方法去触发容器解析注解
+     *
+     * 这个注册有两个意思:
+     * 他可以注册一个配置类 ，如 AppConfig.class
+     * 他还可以单独注册一个bean，如 X.class
+     *
 	 * Register one or more component classes to be processed.
 	 * <p>Note that {@link #refresh()} must be called in order for the context
 	 * to fully process the new classes.
@@ -159,6 +214,11 @@ public class AnnotationConfigApplicationContext extends GenericApplicationContex
 	@Override
 	public void register(Class<?>... componentClasses) {
 		Assert.notEmpty(componentClasses, "At least one component class must be specified");
+        //bd读取器读取加了注解的bean,通过构造方法的方式把它转换成bd 或者说 解析成bd(实际类型为AnnotatedGenericBeanDefinition),
+        //然后注册到工厂的容器(BeanDefinitionMap)当中,
+        //这样后面在ConfigurationClassPostProcessor中能解析componentClasses，例如demo中的AppConfig类，
+        //只有解析了AppConfig类，才能知道Spring要扫描哪些包(因为在AppConfig类中添加了@ComponentScan注解)，
+        //只有知道要扫描哪些包了，才能扫描出需要交给Spring管理的bean有哪些，这样才能利用Spring来创建bean。
 		this.reader.register(componentClasses);
 	}
 

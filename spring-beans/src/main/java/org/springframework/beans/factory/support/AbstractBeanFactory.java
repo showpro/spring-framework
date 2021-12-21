@@ -242,12 +242,19 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 	protected <T> T doGetBean(final String name, @Nullable final Class<T> requiredType,
 			@Nullable final Object[] args, boolean typeCheckOnly) throws BeansException {
 
+        //transformedBeanName(name)这里的name就是bean的名字
+        //这个方法真的很重要，现在只要理解它是对bean的名字进行验证合法性便可
 		final String beanName = transformedBeanName(name);
+        //定义了一个对象，用来存将来返回出来的bean
 		Object bean;
 
 		// Eagerly check singleton cache for manually registered singletons.
-		Object sharedInstance = getSingleton(beanName);
+        // 在实例化bean之前，先从容器中(的单例池，即从singletonObjects这个map集合中获取)获取一次，看先前有没有实例化成功
+        // 这里我们想一下，从refresh()方法开始，容器中肯定不存在该该bean的，getSingleton()这一步是不是有点多余呢？
+        // 不多余。因为doGetBean()方法不只是refresh()方法调用，从容器中获取已经初始化完成的bean也会调用getSingleton()方法。如ac.getBean(X.class)
+		Object sharedInstance = getSingleton(beanName);// 问题：为什么需要在容器初始化的时候执行一次？
 		if (sharedInstance != null && args == null) {
+		    // 如果缓存中存在
 			if (logger.isTraceEnabled()) {
 				if (isSingletonCurrentlyInCreation(beanName)) {
 					logger.trace("Returning eagerly cached instance of singleton bean '" + beanName +
@@ -259,15 +266,17 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 			}
 			bean = getObjectForBeanInstance(sharedInstance, name, beanName, null);
 		}
-
+		// 缓存中不存在
 		else {
 			// Fail if we're already creating this bean instance:
 			// We're assumably within a circular reference.
+            // 验证是否在创建原型的集合当中
 			if (isPrototypeCurrentlyInCreation(beanName)) {
 				throw new BeanCurrentlyInCreationException(beanName);
 			}
 
 			// Check if bean definition exists in this factory.
+            // 验证是否存在父Bean工厂中
 			BeanFactory parentBeanFactory = getParentBeanFactory();
 			if (parentBeanFactory != null && !containsBeanDefinition(beanName)) {
 				// Not found -> check parent.
@@ -288,23 +297,31 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 					return (T) parentBeanFactory.getBean(nameToLookup);
 				}
 			}
-
+            // 标记验证
 			if (!typeCheckOnly) {
+                // 标记bean为已创建
+                // 并清除beanDefinition的缓存(mergedBeanDefinitions)
 				markBeanAsCreated(beanName);
 			}
 
 			try {
+                // 获取到Bean所对应的BeanDefinition对象
 				final RootBeanDefinition mbd = getMergedLocalBeanDefinition(beanName);
+                // 检查bean是否是抽象类
 				checkMergedBeanDefinition(mbd, beanName, args);
 
 				// Guarantee initialization of beans that the current bean depends on.
-				String[] dependsOn = mbd.getDependsOn();
+				// 验证当前bean的创建是否依赖其他bean
+                String[] dependsOn = mbd.getDependsOn();
 				if (dependsOn != null) {
+				    // 如果有依赖的对象，那么会先去实例化依赖的对象。
 					for (String dep : dependsOn) {
+                        // isDependent()方法用来判断dep是否依赖beanName
 						if (isDependent(beanName, dep)) {
 							throw new BeanCreationException(mbd.getResourceDescription(), beanName,
 									"Circular depends-on relationship between '" + beanName + "' and '" + dep + "'");
 						}
+                        // 保存下依赖关系
 						registerDependentBean(dep, beanName);
 						try {
 							getBean(dep);
@@ -317,9 +334,28 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 				}
 
 				// Create bean instance.
+                // 创建bean实例
 				if (mbd.isSingleton()) {
+                    /**
+                     * getSingleton(String beanName, ObjectFactory<?> singletonFactory) 有两个参数，
+                     * 其中参数ObjectFactory是一个函数式接口，函数式接口(Functional Interface)就是一个有且仅有一个抽象方法，但是可以有多个非抽象方法的接口。
+                     * 那么就可以使用Lambda表达式来表示该接口的一个实现。
+                     * Lambda语法包含三部分：
+                     *  1、一个括号内用逗号分隔的形式参数，参数是函数式接口里面方法的参数
+                     *  2、一个箭头符号：->
+                     *  3、方法体，可以是表达式和代码块。
+                     *  (parameters) -> expression 或者 (parameters) -> { statements; }
+                     *  ObjectFactory就是一个函数式接口：他只有一个方法getObject()方法。
+                     * 		 1、因为getObject()方法没有参数，所以 -> 前面的()中不需要声明形参
+                     * 		 2、getObject返回的是非void，所以需要return。
+                     * 		 3、->后面{}写的代码其实就是定义在getObject方法内的代码。因为此处代码只有一行，所以{}也可以省略。如果此处多与一行，则无法省略。
+                     *
+                     * 	此时不会立即执行lambda表达式，而是在调用这个lambda表达式的getObject()方法时才开始执行lambda的方法体
+                     */
 					sharedInstance = getSingleton(beanName, () -> {
 						try {
+						    // 完成了目标对象的创建。
+                            // 如果需要代理，还完成了代理
 							return createBean(beanName, mbd, args);
 						}
 						catch (BeansException ex) {
@@ -405,6 +441,7 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 			return (!BeanFactoryUtils.isFactoryDereference(name) || isFactoryBean(name));
 		}
 		// Not found -> check parent.
+        // 获取父容器
 		BeanFactory parentBeanFactory = getParentBeanFactory();
 		return (parentBeanFactory != null && parentBeanFactory.containsBean(originalBeanName(name)));
 	}
@@ -1768,6 +1805,9 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 	}
 
 	/**
+     * 下面方法的作用是为了根据beanName来判断是返回FactoryBean原生对象还是getObject()方法所返回的对象。
+     * 若beanName以&符号开头，则表示返回FactoryBean原生对象，否则返回getObject()方法所返回的对象。
+     *
 	 * Get the object for the given bean instance, either the bean
 	 * instance itself or its created object in case of a FactoryBean.
 	 * @param beanInstance the shared bean instance
@@ -1800,6 +1840,8 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 			return beanInstance;
 		}
 
+        // 如果是获取FactoryBean的getObject()方法返回的类型对象，则需要进入到如下逻辑
+        // 对于getObject()方法，它返回的对象是在在第一次调用getObject方法时进行实例化的，实例化完成以后，会将结果缓存在factoryBeanObjectCache中
 		Object object = null;
 		if (mbd != null) {
 			mbd.isFactoryBean = true;
@@ -1815,6 +1857,7 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 				mbd = getMergedLocalBeanDefinition(beanName);
 			}
 			boolean synthetic = (mbd != null && mbd.isSynthetic());
+            // 获取FactoryBean返回的对象
 			object = getObjectFromFactoryBean(factory, beanName, !synthetic);
 		}
 		return object;

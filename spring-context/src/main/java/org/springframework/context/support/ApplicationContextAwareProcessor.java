@@ -34,6 +34,10 @@ import org.springframework.lang.Nullable;
 import org.springframework.util.StringValueResolver;
 
 /**
+ * 这个类说起来相当复杂
+ * 要从他的父类BeanPostProcessor说起，可以先查看他的父类，
+ * 看完父类之后再来下面的注释
+ *
  * {@link BeanPostProcessor} implementation that supplies the {@code ApplicationContext},
  * {@link org.springframework.core.env.Environment Environment}, or
  * {@link StringValueResolver} for the {@code ApplicationContext} to beans that
@@ -103,6 +107,11 @@ class ApplicationContextAwareProcessor implements BeanPostProcessor {
 		return bean;
 	}
 
+    /**
+     * 这段代码逻辑很简单，就是bean实现了如下某种Aware接口，就给这个bean set相应的属性，如applicationContext
+     * 那么这些接口方法调用的先后顺序就是下面接口排列的先后顺序。
+     * @param bean
+     */
 	private void invokeAwareInterfaces(Object bean) {
 		if (bean instanceof EnvironmentAware) {
 			((EnvironmentAware) bean).setEnvironment(this.applicationContext.getEnvironment());
@@ -119,6 +128,9 @@ class ApplicationContextAwareProcessor implements BeanPostProcessor {
 		if (bean instanceof MessageSourceAware) {
 			((MessageSourceAware) bean).setMessageSource(this.applicationContext);
 		}
+        // spring帮你set一个applicationContext对象
+        // 所以当我们自己定义的bean对象实现了ApplicationContextAware接口时只需要提供setter就能得到applicationContext对象
+        // 此处应该有鲜花。。。。
 		if (bean instanceof ApplicationContextAware) {
 			((ApplicationContextAware) bean).setApplicationContext(this.applicationContext);
 		}

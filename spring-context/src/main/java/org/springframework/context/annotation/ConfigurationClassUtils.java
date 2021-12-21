@@ -63,8 +63,13 @@ abstract class ConfigurationClassUtils {
 
 	private static final Log logger = LogFactory.getLog(ConfigurationClassUtils.class);
 
+    // candidateIndicators 是一个静态常量，在初始化时，包含了四个元素
+    // 分别为@Component,@ComponentScan,@Import,@ImportResource这四个注解
+    // 只要这个类上添加了这四种注解中的一个，就便是这个类是一个配置类，
+    // 这个类对应的BeanDefinition中的configurationClass属性值为lite
 	private static final Set<String> candidateIndicators = new HashSet<>(8);
 
+    // 类加载至JVM时，向集合中添加了四个元素
 	static {
 		candidateIndicators.add(Component.class.getName());
 		candidateIndicators.add(ComponentScan.class.getName());
@@ -93,11 +98,15 @@ abstract class ConfigurationClassUtils {
 		if (beanDef instanceof AnnotatedBeanDefinition &&
 				className.equals(((AnnotatedBeanDefinition) beanDef).getMetadata().getClassName())) {
 			// Can reuse the pre-parsed metadata from the given BeanDefinition...
+            // 如果BeanDefinition 是 AnnotatedBeanDefinition的实例,并且className 和 BeanDefinition中 的元数据 的类名相同
+            // 则直接从BeanDefinition 获得Metadata
 			metadata = ((AnnotatedBeanDefinition) beanDef).getMetadata();
 		}
 		else if (beanDef instanceof AbstractBeanDefinition && ((AbstractBeanDefinition) beanDef).hasBeanClass()) {
 			// Check already loaded Class if present...
 			// since we possibly can't even load the class file for this Class.
+            // 如果BeanDefinition 是 AbstractBeanDefinition的实例,并且beanDef 有 beanClass 属性存在
+            // 则实例化StandardAnnotationMetadata
 			Class<?> beanClass = ((AbstractBeanDefinition) beanDef).getBeanClass();
 			if (BeanFactoryPostProcessor.class.isAssignableFrom(beanClass) ||
 					BeanPostProcessor.class.isAssignableFrom(beanClass) ||
@@ -121,11 +130,44 @@ abstract class ConfigurationClassUtils {
 			}
 		}
 
+        /**
+         *  Full 全模式，Lite 轻量级模式
+         *
+         *  注解@Configuration(proxyBeanMethods = false)
+         *
+         *  Full(proxyBeanMethods = true) :proxyBeanMethods参数设置为true时即为：Full 全模式。
+         *  该模式下注入容器中的同一个组件无论被取出多少次都是同一个bean实例，即单实例对象，
+         *  在该模式下SpringBoot每次启动都会判断检查容器中是否存在该组件
+         *
+         *  Lite(proxyBeanMethods = false) :proxyBeanMethods参数设置为false时即为：Lite 轻量级模式。
+         *  该模式下注入容器中的同一个组件无论被取出多少次都是不同的bean实例，即多实例对象，
+         *  在该模式下SpringBoot每次启动会跳过检查容器中是否存在该组件
+         *
+         *  什么时候用Full全模式，什么时候用Lite轻量级模式？
+         *  当在你的同一个Configuration配置类中，注入到容器中的bean实例之间有依赖关系时，建议使用Full全模式
+         *  当在你的同一个Configuration配置类中，注入到容器中的bean实例之间没有依赖关系时，建议使用Lite轻量级模式，以提高springboot的启动速度和性能
+         *
+         *  proxyBeanMethods 属性默认值是 true, 也就是说该配置类会被代理（CGLIB），在同一个配置文件中调用其它被 @Bean 注解标注的方法获取对象时会直接从 IOC 容器之中获取；
+         *  proxyBeanMethods 配置类是用来指定 @Bean 注解标注的方法是否使用代理，默认是 true 使用代理，直接从 IOC 容器之中取得对象；如果设置为 false, 也就是不使用注解，
+         * 每次调用 @Bean 标注的方法获取到的对象和 IOC 容器中的都不一样，是一个新的对象，所以我们可以将此属性设置为 false 来提高性能；
+         *
+         * 根据@Configuration源码中的注释 proxyBeanMethods 是为了让使用 @Bean 注解的方法被代理而实现 bean 的生命周期的行为。
+         *
+         * 设置为 true，那么直接调用方法获取 bean，不会创建新的 bean，而是会走 bean 的生命周期的行为。
+         * 设置为 false, 那么直接调用方法获取 bean，会创建新的 bean，且不会走 bean 的生命周期的行为。
+         *
+         */
+
+		//判断当前这个bd中存在的类是不是加了@Configruation注解
 		Map<String, Object> config = metadata.getAnnotationAttributes(Configuration.class.getName());
 		if (config != null && !Boolean.FALSE.equals(config.get("proxyBeanMethods"))) {
+            //如果存在Configuration 注解,且注解中的方法=false(即没有使用代理)
+            // 则为BeanDefinition 设置configurationClass属性为Full模式，则spring认为他是一个全注解的类
 			beanDef.setAttribute(CONFIGURATION_CLASS_ATTRIBUTE, CONFIGURATION_CLASS_FULL);
 		}
 		else if (config != null || isConfigurationCandidate(metadata)) {
+            //如果存在Configuration 注解 或者 判断是否含有@Bean,@Component,@ComponentScan,@Import,@ImportResource注解，摘录isConfigurationCandidate的源码
+            // 则设置BeanDefinition属性为Lite,spring则认为是一个部分注解类
 			beanDef.setAttribute(CONFIGURATION_CLASS_ATTRIBUTE, CONFIGURATION_CLASS_LITE);
 		}
 		else {
@@ -155,6 +197,7 @@ abstract class ConfigurationClassUtils {
 		}
 
 		// Any of the typical annotations found?
+        // 找到@Component,@ComponentScan,@Import,@ImportResource其中的任何一个注解，就返回
 		for (String indicator : candidateIndicators) {
 			if (metadata.isAnnotated(indicator)) {
 				return true;
@@ -163,6 +206,7 @@ abstract class ConfigurationClassUtils {
 
 		// Finally, let's look for @Bean methods...
 		try {
+            // 查找有没有加了@Bean注解的方法
 			return metadata.hasAnnotatedMethods(Bean.class.getName());
 		}
 		catch (Throwable ex) {
