@@ -174,8 +174,8 @@ public abstract class AnnotationConfigUtils {
          */
         // 注册ConfigurationClassPostProcessor,这个类超级重要，它完成了对加了Configuration注解类的解析，@ComponentScan、@Import的解析。
 		if (!registry.containsBeanDefinition(CONFIGURATION_ANNOTATION_PROCESSOR_BEAN_NAME)) {// spring环境中是否包含这个常量
-            //需要注意的是ConfigurationClassPostProcessor的类型是BeanDefinitionRegistryPostProcessor
-            //而 BeanDefinitionRegistryPostProcessor 最终实现BeanFactoryPostProcessor这个接口
+            //需要注意的是ConfigurationClassPostProcessor 实现了 BeanDefinitionRegistryPostProcessor接口
+            //而 BeanDefinitionRegistryPostProcessor 最终实现 BeanFactoryPostProcessor 这个接口
             //RootBeanDefinition 是spring内部提供的类，变成bd的第二种方法可以通过一个BeanDefinition的实现类的构造方法将一个类变成bd
 		    RootBeanDefinition def = new RootBeanDefinition(ConfigurationClassPostProcessor.class);
 			def.setSource(source);
@@ -200,7 +200,7 @@ public abstract class AnnotationConfigUtils {
 		}
 
 		// Check for JPA support, and if present add the PersistenceAnnotationBeanPostProcessor.
-        // 注册PersistenceAnnotationBeanPostProcessor，来用支持JPA
+        // 检查 JPA 支持，如果存在，注册PersistenceAnnotationBeanPostProcessor，来用支持JPA
 		if (jpaPresent && !registry.containsBeanDefinition(PERSISTENCE_ANNOTATION_PROCESSOR_BEAN_NAME)) {
 			RootBeanDefinition def = new RootBeanDefinition();
 			try {
