@@ -345,7 +345,7 @@ class ConfigurationClassParser {
 		}
 
 		// Process any @Import annotations
-        // 4.处理Import注解注册的bean，这一步只会将import注册的bean变为ConfigurationClass,不会变成BeanDefinition
+        // 4.处理@Import注解注册的bean，这一步只会将import注册的bean变为ConfigurationClass,不会变成BeanDefinition
         // 而是在loadBeanDefinitions()方法中变成BeanDefinition，再放入到BeanDefinitionMap中
         // 关于Import注解,后面会单独写文章介绍
 		processImports(configClass, sourceClass, getImports(sourceClass), filter, true);
@@ -609,6 +609,7 @@ class ConfigurationClassParser {
 				for (SourceClass candidate : importCandidates) {
 					if (candidate.isAssignable(ImportSelector.class)) {
 						// Candidate class is an ImportSelector -> delegate to it to determine imports
+						// 处理DeferredImportSelector的实现类，回调开发人员重写的selectImports()方法
 						Class<?> candidateClass = candidate.loadClass();
 						ImportSelector selector = ParserStrategyUtils.instantiateClass(candidateClass, ImportSelector.class,
 								this.environment, this.resourceLoader, this.registry);
@@ -620,15 +621,22 @@ class ConfigurationClassParser {
 							this.deferredImportSelectorHandler.handle(configClass, (DeferredImportSelector) selector);
 						}
 						else {
+							// 处理DeferredImportSelector的实现类，回调开发人员重写的selectImports()方法
+							// 返回值是一个字符串数组，数组元素为类的全类名，然后把全类名变为SourceClass
+							// 为什么要变为SourceClass呢？因为在此处解析时，Spring是通过SourceClass来解析类的
 							String[] importClassNames = selector.selectImports(currentSourceClass.getMetadata());
 							Collection<SourceClass> importSourceClasses = asSourceClasses(importClassNames, exclusionFilter);
+							// 递归调用processImports,为什么要递归调用该方法？
+							// 因为上面返回的全类名所表示的类可能是ImportSelector或者ImportBeanDefinitionRegistrar
 							processImports(configClass, currentSourceClass, importSourceClasses, exclusionFilter, false);
 						}
 					}
 					else if (candidate.isAssignable(ImportBeanDefinitionRegistrar.class)) {
 						// Candidate class is an ImportBeanDefinitionRegistrar ->
 						// delegate to it to register additional bean definitions
+						// 处理ImportBeanDefinitionRegistrar类
 						Class<?> candidateClass = candidate.loadClass();
+						// 在此处回调开发人员重写的ImportBeanDefinitionRegistrar的registerBeanDefinitions()方法
 						ImportBeanDefinitionRegistrar registrar =
 								ParserStrategyUtils.instantiateClass(candidateClass, ImportBeanDefinitionRegistrar.class,
 										this.environment, this.resourceLoader, this.registry);
@@ -637,6 +645,9 @@ class ConfigurationClassParser {
 					else {
 						// Candidate class not an ImportSelector or ImportBeanDefinitionRegistrar ->
 						// process it as an @Configuration class
+						// 处理通过Import注解导入的普通类，例如本次Demo中的自定义的类RegularBean
+						// 这里只需要直接调用processConfigurationClass()方法即可，把RegularBean当做一个配置类去解析
+						// 因为RegularBean这个类型可能加了@ConponentScan，@Bean等注解
 						this.importStack.registerImport(
 								currentSourceClass.getMetadata(), candidate.getMetadata().getClassName());
 						processConfigurationClass(candidate.asConfigClass(configClass), exclusionFilter);

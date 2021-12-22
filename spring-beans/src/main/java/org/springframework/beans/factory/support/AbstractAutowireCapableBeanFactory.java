@@ -1447,15 +1447,23 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		PropertyValues pvs = (mbd.hasPropertyValues() ? mbd.getPropertyValues() : null);
 
 		int resolvedAutowireMode = mbd.getResolvedAutowireMode();
+		// 判断bean的注入模型是byName，还是byType。
 		if (resolvedAutowireMode == AUTOWIRE_BY_NAME || resolvedAutowireMode == AUTOWIRE_BY_TYPE) {
 			MutablePropertyValues newPvs = new MutablePropertyValues(pvs);
 			// Add property values based on autowire by name if applicable.
 			if (resolvedAutowireMode == AUTOWIRE_BY_NAME) {
+				//autowireByName()方法中，会先通过setter方法找到属性，然后根据属性名从容器中查找Bean，为其属性赋值
 				autowireByName(beanName, mbd, bw, newPvs);
 			}
 			// Add property values based on autowire by type if applicable.
+			// 对于MyBatis而言，Mapper在实例化之后，会填充属性，这个时候，需要找到MapperFactoryBean有哪些属性需要填充
+			// 在Mapper的BeanDefinition初始化时，默认添加了一个属性，addToConfig
+			// 在下面的if逻辑中，执行完autowireByType()方法后，会找出另外另个需要填充的属性，分别是sqlSessionFactory和sqlSessionTemplate
 			if (resolvedAutowireMode == AUTOWIRE_BY_TYPE) {
+				//autowireByType()这个方法也是先根据setter方法查找属性，然后再根据属性的类型从容器中查找bean，为其属性赋值。
 				autowireByType(beanName, mbd, bw, newPvs);
+				//注意上面提到了通过setter方法查找属性，在查找时Spring会忽略调很多setter方法，
+				//例如属性的类型是基本数据类型，包装类型，Date，String,Class，Local等等，这些都会被Spring忽略。
 			}
 			pvs = newPvs;
 		}
@@ -1478,6 +1486,8 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 						if (filteredPds == null) {
 							filteredPds = filterPropertyDescriptorsForDependencyCheck(bw, mbd.allowCaching);
 						}
+						// 执行后置处理器，填充属性，完成自动装配
+						// 在这里会调用到AutowiredAnnotationBeanPostProcessor
 						pvsToUse = ibp.postProcessPropertyValues(pvs, filteredPds, bw.getWrappedInstance(), beanName);
 						if (pvsToUse == null) {
 							return;
@@ -1496,6 +1506,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		}
 
 		if (pvs != null) {
+			// 实现通过byName或者byType类型的属性注入
 			applyPropertyValues(beanName, mbd, bw, pvs);
 		}
 	}

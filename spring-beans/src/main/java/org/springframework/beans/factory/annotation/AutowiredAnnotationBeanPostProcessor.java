@@ -133,6 +133,12 @@ public class AutowiredAnnotationBeanPostProcessor extends InstantiationAwareBean
 
 	protected final Log logger = LogFactory.getLog(getClass());
 
+	/**
+	 * 这个全局变量在AutowiredAnnotationBeanPostProcessor的构造方法中进行了初始化。
+	 * 初始化时，只向这个set集合中添加了三个元素：@Autowired、@Inject、@Value。其中@Inject注解是JSR-330规范中的注解。
+	 * 当调用findAutowiringMetadata()方法时，会根据autowiredAnnotationTypes这个全局变量中的元素类型来进行注解的解析，
+	 * 因此上面只说了findAutowiringMetadata()方法会解析出Autowired注解、@Inject和@Value注解这三个注解。
+	 */
 	private final Set<Class<? extends Annotation>> autowiredAnnotationTypes = new LinkedHashSet<>(4);
 
 	private String requiredParameterName = "required";
@@ -159,9 +165,12 @@ public class AutowiredAnnotationBeanPostProcessor extends InstantiationAwareBean
 	 */
 	@SuppressWarnings("unchecked")
 	public AutowiredAnnotationBeanPostProcessor() {
+		// 添加@Autowired
 		this.autowiredAnnotationTypes.add(Autowired.class);
+		// 添加@Value
 		this.autowiredAnnotationTypes.add(Value.class);
 		try {
+			// 如果项目中引入了JSR-330相关的jar包，那么就会添加@Inject
 			this.autowiredAnnotationTypes.add((Class<? extends Annotation>)
 					ClassUtils.forName("javax.inject.Inject", AutowiredAnnotationBeanPostProcessor.class.getClassLoader()));
 			logger.trace("JSR-330 'javax.inject.Inject' annotation found and supported for autowiring");
@@ -394,8 +403,13 @@ public class AutowiredAnnotationBeanPostProcessor extends InstantiationAwareBean
 
 	@Override
 	public PropertyValues postProcessProperties(PropertyValues pvs, Object bean, String beanName) {
+		// 解析出bean中带有@Autowired注解、@Inject和@Value注解的属性和方法
+		// 对于本文的demo而言，在此处就会解析出X类中的y属性
+		// 至于如何解析的，findAutowiringMetadata()方法比较复杂，这里就不展开了，Spring中提供了很多对注解等元数据信息读取的方法，进行了大量的封装。
+		// 如果不是自己亲自参与开发Spring的话，很难摸透它封装的那些数据结构。
 		InjectionMetadata metadata = findAutowiringMetadata(beanName, bean.getClass(), pvs);
 		try {
+			// 自动装配，实现依赖注入
 			metadata.inject(bean, beanName, pvs);
 		}
 		catch (BeanCreationException ex) {
@@ -695,6 +709,9 @@ public class AutowiredAnnotationBeanPostProcessor extends InstantiationAwareBean
 			}
 			Method method = (Method) this.member;
 			Object[] arguments;
+			// 判断缓存（第一次注入userService的时候，肯定没有缓存，所以会进入到else里面）
+			// 当第一次注入完成后，会将userService缓存到cachedFieldValue这个属性中，
+			// 这样当其他的类同样需要注入userService时，就会从这儿的缓存当中读取了。
 			if (this.cached) {
 				// Shortcut for avoiding synchronization...
 				arguments = resolveCachedArguments(beanName);
@@ -712,6 +729,7 @@ public class AutowiredAnnotationBeanPostProcessor extends InstantiationAwareBean
 					currDesc.setContainingClass(bean.getClass());
 					descriptors[i] = currDesc;
 					try {
+						// 通过beanFactory.resolveDependency()方法，来从容器中找到y属性对应的值。
 						Object arg = beanFactory.resolveDependency(currDesc, beanName, autowiredBeans, typeConverter);
 						if (arg == null && !this.required) {
 							arguments = null;
@@ -723,6 +741,7 @@ public class AutowiredAnnotationBeanPostProcessor extends InstantiationAwareBean
 						throw new UnsatisfiedDependencyException(null, beanName, new InjectionPoint(methodParam), ex);
 					}
 				}
+				// 将arg进行缓存
 				synchronized (this) {
 					if (!this.cached) {
 						if (arguments != null) {
@@ -751,6 +770,7 @@ public class AutowiredAnnotationBeanPostProcessor extends InstantiationAwareBean
 			}
 			if (arguments != null) {
 				try {
+					// 通过Java的反射，为属性进行赋值
 					ReflectionUtils.makeAccessible(method);
 					method.invoke(bean, arguments);
 				}
