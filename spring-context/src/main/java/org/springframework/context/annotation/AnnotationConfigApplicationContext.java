@@ -78,8 +78,8 @@ public class AnnotationConfigApplicationContext extends GenericApplicationContex
          * 先调父类的构造方法：实例化一个BeanFactory工厂：DefaultListableBeanFactory
          *
          * 创建一个Bean读取器，用来读取加了注解的Bean定义，
-         * 同时向容器(BeanDefinitionMap)中注册了 7 个spring自带的后置处理器(包括BeanPostProcessor和BeanFactoryPostProcessor)
-         * 这里的注册指的是将这7个类对应的BeanDefinition放入到BeanDefinitionMap中。
+         * Bean读取器的构造方法中同时向容器(BeanDefinitionMap)中注册了 5个spring自带的后置处理器(包括BeanPostProcessor和BeanFactoryPostProcessor)
+         * 这里的注册指的是将这 5 个类对应的BeanDefinition放入到BeanDefinitionMap中。其中如果存在JPA，会注册JPA的后置处理器，则是共注册 6 个（其中1个BeanFactoryPostProcessor，5个 BeanPostProcessor）
          *
          * 什么是bean定义（或bean的描述）？即BeanDefinition。BeanDefinition对象来描述spring中bean的信息，类似于Class对象来描述java类的信息
          *
@@ -87,7 +87,9 @@ public class AnnotationConfigApplicationContext extends GenericApplicationContex
 	    // 读取加了注解的bean
         // this.registerBeanDefinition();
 		this.reader = new AnnotatedBeanDefinitionReader(this);
-		// 会创建一个扫描器，后面似乎并没有用到这个扫描器，在refresh()中使用的是重新new的一个扫描器。
+		// 会创建一个扫描器，可以用来扫描包或者类，继而转换成bd
+        // 但是实际上我们扫描包工作并没有用到这个scanner扫描器，在refresh()中使用的是spring自己重新new的一个扫描器ClassPathBeanDefinitionScanner。
+        // 这里的scanner仅仅是为了程序员能够在外部调用AnnotationConfigApplicationContext对象的scan方法完成一些其他的扫描
 		this.scanner = new ClassPathBeanDefinitionScanner(this);
 	}
 

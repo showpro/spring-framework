@@ -12,8 +12,7 @@ org.springframework.context.support.GenericApplicationContext->GenericApplicatio
 			    从环境中得到一个工厂
 				1、添加AnnotationAwareOrderComparator类的对象到工厂中，主要去排序
 				2、添加ContextAnnotationAutowireCandidateResolver到工厂中，处理延迟加载
-				3、往BeanDefinitionMap注册一个ConfigurationClassPostProcessor?  org.springframework.context.annotation
-				.internalConfigurationAnnotationProcessor
+				3、往BeanDefinitionMap注册一个ConfigurationClassPostProcessor? 对应的bdName为(key为)org.springframework.context.annotation.internalConfigurationAnnotationProcessor
 					why一开始就注册ConfigurationClassPostProcessor?因为需要在后面的invokeBeanFactoryPostProcessors中用到。
 					invokeBeanFactoryPostProcessors()主要是在spring的beanFactory初始化的过程中去做一些事情，怎么来做这些事情呢？
 					委托了多个实现了BeanDefinitionRegistryPostProcessor接口或者实现了BeanFactoryProcessor接口的类来做这些事情,有自定义的也有spring内部的

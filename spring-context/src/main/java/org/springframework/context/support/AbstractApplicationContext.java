@@ -57,6 +57,7 @@ import org.springframework.context.MessageSourceResolvable;
 import org.springframework.context.NoSuchMessageException;
 import org.springframework.context.PayloadApplicationEvent;
 import org.springframework.context.ResourceLoaderAware;
+import org.springframework.context.annotation.ConfigurationClassPostProcessor;
 import org.springframework.context.event.ApplicationEventMulticaster;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.ContextRefreshedEvent;
@@ -528,15 +529,15 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 
 			// Tell the subclass to refresh the internal bean factory.
             // 返回一个DefaultListableBeanFactory。 为什么需要返回一个工厂?
-            // 因为需要对工厂的属性进行一些设置
+            // 因为需要对工厂的属性进行一些设置(对工厂进行初始化)
 			ConfigurableListableBeanFactory beanFactory = obtainFreshBeanFactory();
 
 			// Prepare the bean factory for use in this context.
             // 准备bean工厂。
-            // 向beanFactory中注册了两个BeanPostProcessor,以及三个和环境相关的bean
+            // 向BeanFactory中注册了两个BeanPostProcessor,以及三个和环境相关的bean
             // 这两个后置处理器为ApplicationContextAwareProcessor 和 ApplicationListenerDetector
-            // 前一个后置处理是为实现了ApplicationContextAware接口的类，回调setApplicationContext()方法，
-            // 后一个处理器时用来检测ApplicationListener类的，当某个Bean实现了ApplicationListener接口的bean被创建好后，会被加入到监听器列表中
+            // 前一个后置处理器是为实现了ApplicationContextAware接口的类，回调setApplicationContext()方法，
+            // 后一个处理器是用来检测ApplicationListener类的，当某个Bean实现了ApplicationListener接口的bean被创建好后，会被加入到监听器列表中
 			prepareBeanFactory(beanFactory);
 
 			try {
@@ -544,8 +545,11 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
                 // 空方法，有子类实现
 				postProcessBeanFactory(beanFactory);
 
-				// Invoke factory processors registered as beans in the context.
-                // 执行已经被注册的bean工厂后置处理器，包括自定义的，以及spring内置的。默认情况下，容器中只有一个BeanFactoryPostProcessor,即：Spring内置的，ConfigurationClassPostProcessor(这个类很重要)
+                // Invoke factory processors registered as beans in the context.
+                /**
+                 * @see ConfigurationClassPostProcessor  到这里Spring中存在一个内置的 BeanFactoryPostProcessor，它是在 AnnotatedBeanDefinitionReader读取器实例化的时候注册的
+                 */
+                // 执行已经被注册的bean工厂后置处理器，其中包括自定义的，以及spring内置的。默认情况下，容器中只有一个BeanFactoryPostProcessor,即：Spring内置的，ConfigurationClassPostProcessor(这个类很重要)
                 // 会先执行实现了BeanDefinitionRegistryPostProcessor接口的类，然后执行BeanFactoryPostProcessor的类
                 // ConfigurationClassPostProcessor类的postProcessorBeanFactory()方法进行了@Configuration类的解析，@ComponentScan的扫描，以及@Import注解的处理
                 // 经过这一步以后,会将所有交由spring管理的bean所对应的BeanDefinition放入到beanFactory的beanDefinitionMap中
@@ -720,7 +724,7 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
         // set bean表达式解释器，为了能够让我们的beanFactory去解析bean表达式
         // 后面说  能够获取bean当中的属性在前台页面
 		beanFactory.setBeanExpressionResolver(new StandardBeanExpressionResolver(beanFactory.getBeanClassLoader()));
-        // 对象与string类型的转换   <property red="dao">
+        // 对象与string类型的转换   例如：<property ref="dao">, 将dao转换成对象
 		beanFactory.addPropertyEditorRegistrar(new ResourceEditorRegistrar(this, getEnvironment()));
 
 		// Configure the bean factory with context callbacks.
@@ -738,12 +742,16 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 
 		// BeanFactory interface not registered as resolvable type in a plain factory.
 		// MessageSource registered (and found for autowiring) as a bean.
+        // 依赖的替换
+        // 比如你在一个对象中注入BeanFactory，spring就会用传进来的beanFactory去替换BeanFactory
+        // 比如你在一个对象中注入ResourceLoader，spring就会用this去替换ResourceLoader...
 		beanFactory.registerResolvableDependency(BeanFactory.class, beanFactory);
 		beanFactory.registerResolvableDependency(ResourceLoader.class, this);
 		beanFactory.registerResolvableDependency(ApplicationEventPublisher.class, this);
 		beanFactory.registerResolvableDependency(ApplicationContext.class, this);
 
 		// Register early post-processor for detecting inner beans as ApplicationListeners.
+        // 往bean工厂中添加一个后置处理器:ApplicationListenerDetector
 		beanFactory.addBeanPostProcessor(new ApplicationListenerDetector(this));
 
 		// Detect a LoadTimeWeaver and prepare for weaving, if found.
@@ -754,6 +762,9 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 		}
 
 		// Register default environment beans.
+        // 意思是如果自定义的Bean中没有名为"environment"和"systemProperties"和"systemEnvironment"的Bean，
+        // 则注册三个Bena，Key为"environment"和"systemProperties"和"systemEnvironment"，Value为Map，
+        // 这三个Bean就是一些系统配置和系统环境信息
 		if (!beanFactory.containsLocalBean(ENVIRONMENT_BEAN_NAME)) {
 			beanFactory.registerSingleton(ENVIRONMENT_BEAN_NAME, getEnvironment());
 		}
@@ -776,7 +787,7 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 	}
 
 	/**
-     * 实例化并执行所有实现了 BeanFactoryPostProcessor 的 bean
+     * 实例化并执行所有实现了 BeanFactoryPostProcessor 的 bean（后置处理器）
      * 主要是在spring的beanFactory初始化的过程中去做一些事情
      *
 	 * Instantiate and invoke all registered BeanFactoryPostProcessor beans,
@@ -791,10 +802,11 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
         //getBeanFactoryPostProcessors()得到自己定义的工厂后置处理器（就是程序员自己写的，并且没有交给spring管理，就是没有加上@Component）
         //所谓的自定义的就是你手动调用：如AnnotationConfigApplicationContext.addBeanFactoryPostProcesor(new MyBeanFactoryPostProcessor1());
         //自定义并不仅仅是程序员自己写的
-        //自己写的可以加@Component注解也可以不加
-        //如果加了，getBeanFactoryPostProcessors()这个地方获取不到，是spring自己扫描的
-        //为什么得不到？getBeanFactoryPostProcessors()这个方法是直接获取一个list，
-        //这个list是在AnnotationConfigApplicationContext被定义
+        //自己写的可以加@Component注解，也可以不加
+        //如果加了注解，hui交给spring管理，spring会自己扫描，getBeanFactoryPostProcessors()这个地方获取不到，
+        //为什么得不到？getBeanFactoryPostProcessors()这个方法是直接获取一个list 【List<BeanFactoryPostProcessor> beanFactoryPostProcessors】，
+        //这个list是在AnnotationConfigApplicationContext中被定义，main方法中一开始实例化AnnotationConfigApplicationContext的时候并没有给这个list赋过任何值。
+        //如果需要赋值，需手动添加，比如 ac.addBeanFactoryPostProcessor(new MyBeanFactoryPostProcessor1());
 	    PostProcessorRegistrationDelegate.invokeBeanFactoryPostProcessors(beanFactory, getBeanFactoryPostProcessors());
 
 		// Detect a LoadTimeWeaver and prepare for weaving, if found in the meantime
