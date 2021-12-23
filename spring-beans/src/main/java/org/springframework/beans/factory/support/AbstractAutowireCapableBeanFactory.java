@@ -505,7 +505,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		try {
 			// Give BeanPostProcessors a chance to return a proxy instead of the target bean instance.
             /**
-             * 让 BeanPostProcessors 有机会返回一个代理而不是目标 bean 实例。
+             * 让 BeanPostProcessors 有机会返回一个代理对象而不是目标 bean 实例。
              * 第一次调用后置处理器(执行所有InstantiationAwareBeanPostProcessor的子类)
              * 如果InstantiationAwareBeanPostProcessor的子类的postProcessBeforeInstantiation()方法返回值不为空，表示bean需要被增强，
              * 此时将不会执行后面的逻辑，AOP的实际应用就是在这儿实现的
@@ -1481,12 +1481,14 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			for (BeanPostProcessor bp : getBeanPostProcessors()) {
 				if (bp instanceof InstantiationAwareBeanPostProcessor) {
 					InstantiationAwareBeanPostProcessor ibp = (InstantiationAwareBeanPostProcessor) bp;
+					//主要用于处理类含有 @Value、@Autowired和@Inject注解的属性，进行属性信息的提取和设置。
+					//把属性信息写入到 PropertyValues 的集合中去。这一步的操作相当于是解决了以前在 spring.xml 配置属性的过程。
 					PropertyValues pvsToUse = ibp.postProcessProperties(pvs, bw.getWrappedInstance(), beanName);
 					if (pvsToUse == null) {
 						if (filteredPds == null) {
 							filteredPds = filterPropertyDescriptorsForDependencyCheck(bw, mbd.allowCaching);
 						}
-						// 执行后置处理器，填充属性，完成自动装配
+						// 执行后置处理器，完成自动装配
 						// 在这里会调用到AutowiredAnnotationBeanPostProcessor
 						pvsToUse = ibp.postProcessPropertyValues(pvs, filteredPds, bw.getWrappedInstance(), beanName);
 						if (pvsToUse == null) {
@@ -1506,6 +1508,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		}
 
 		if (pvs != null) {
+			// 给bean填充属性
 			// 实现通过byName或者byType类型的属性注入
 			applyPropertyValues(beanName, mbd, bw, pvs);
 		}
