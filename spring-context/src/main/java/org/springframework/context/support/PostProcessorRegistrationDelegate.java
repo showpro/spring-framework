@@ -349,7 +349,7 @@ final class PostProcessorRegistrationDelegate {
 	private static void invokeBeanDefinitionRegistryPostProcessors(
 			Collection<? extends BeanDefinitionRegistryPostProcessor> postProcessors, BeanDefinitionRegistry registry) {
 
-		// 拿到spring当中所有的BeanFactoryPostProcessor实现对象，执行postProcessBeanDefinitionRegistry()方法完成扫描
+		// 拿到spring当中所有的BeanDefinitionRegistryPostProcessor实现对象，执行postProcessBeanDefinitionRegistry()扩展方法完成扫描
 	    for (BeanDefinitionRegistryPostProcessor postProcessor : postProcessors) {
 	        //其实这里postProcessor就只有ConfigurationClassPostProcessor这个后置处理器
 			postProcessor.postProcessBeanDefinitionRegistry(registry);

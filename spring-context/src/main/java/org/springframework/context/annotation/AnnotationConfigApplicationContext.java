@@ -216,7 +216,7 @@ public class AnnotationConfigApplicationContext extends GenericApplicationContex
 	@Override
 	public void register(Class<?>... componentClasses) {
 		Assert.notEmpty(componentClasses, "At least one component class must be specified");
-        //bd读取器读取加了注解的bean,通过构造方法的方式把它转换成bd 或者说 解析成bd(实际类型为AnnotatedGenericBeanDefinition),
+        //bd读取器读取加了注解的bean,通过BeanDefinition构造方法的方式把bean转换成bd 或者说 解析成bd(实际类型为AnnotatedGenericBeanDefinition),
         //然后注册到工厂的容器(BeanDefinitionMap)当中,
         //这样后面在ConfigurationClassPostProcessor中能解析componentClasses，例如demo中的AppConfig类，
         //只有解析了AppConfig类，才能知道Spring要扫描哪些包(因为在AppConfig类中添加了@ComponentScan注解)，

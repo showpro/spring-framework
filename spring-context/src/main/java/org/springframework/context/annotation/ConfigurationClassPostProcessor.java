@@ -223,6 +223,10 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 	@Override
 	public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) {
 		int registryId = System.identityHashCode(registry);
+        // 下面的if语句不会进入，因为在执行BeanFactoryPostProcessor时，会先执行BeanDefinitionRegistryPostProcessor中的扩展方法postProcessorBeanDefinitionRegistry()
+        // 而在执行postProcessorBeanDefinitionRegistry方法时，都会调用processConfigBeanDefinitions方法，这与postProcessorBeanFactory()方法的执行逻辑是一样的
+        // postProcessorBeanFactory()方法也会调用processConfigBeanDefinitions方法，为了避免重复执行，所以在执行方法之前会先生成一个id，将id放入到一个set当中，每次执行之前
+        // 先判断id是否存在，所以在此处，永远不会进入到if语句中
 		if (this.registriesPostProcessed.contains(registryId)) {
 			throw new IllegalStateException(
 					"postProcessBeanDefinitionRegistry already called on this post-processor against " + registry);
@@ -231,6 +235,7 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 			throw new IllegalStateException(
 					"postProcessBeanFactory already called on this post-processor against " + registry);
 		}
+        //这里的registriesPostProcessed采用的是set数据类型，set我们都知道事去重的
 		this.registriesPostProcessed.add(registryId);
 
 		processConfigBeanDefinitions(registry);
@@ -271,11 +276,13 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 	}
 
 	/**
+     * 处理为配置类（即加了注解）的BeanDefinition
+     *
 	 * Build and validate a configuration model based on the registry of
 	 * {@link Configuration} classes.
 	 */
 	public void processConfigBeanDefinitions(BeanDefinitionRegistry registry) {
-        //定义一个list存放app程序提供的bd（项目当中提供了@Component）
+        //定义一个list存放程序提供的bd（项目当中提供了@Component）
 		List<BeanDefinitionHolder> configCandidates = new ArrayList<>();
 		// 获取容器中注册的所有bean名字
         // 6个
@@ -284,6 +291,8 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 		for (String beanName : candidateNames) {
 		    //依次拿出bd
 			BeanDefinition beanDef = registry.getBeanDefinition(beanName);
+			// BeanDefinition的属性是一个map集合：Map<String, Object> attributes = new LinkedHashMap<>();
+			//判断bd的attribute的key是否设置为configurationClass，即是否标记为配置类，如果是，说明该BeanDefinition已经标记过了
 			if (beanDef.getAttribute(ConfigurationClassUtils.CONFIGURATION_CLASS_ATTRIBUTE) != null) {
 				if (logger.isDebugEnabled()) {
 					logger.debug("Bean definition has already been processed as a configuration class: " + beanDef);
@@ -291,18 +300,20 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 			}
 
             /**
-             * 判断给定的bd是否是配置类,并为BeanDefinition设置属性为lite或者full。
-             * 如果加了@Configuration注解，那么对应的BeanDefinition为full，
-             * 如果加了@Bean，@Component，@ComponentScan，@Import，@ImportResource这些注解，则为lite。
+             * 判断给定的bd是否是配置类,并为BeanDefinition设置属性的key为lite或者full。
+             * 如果加了@Configuration注解，那么对应的BeanDefinition属性的key标记为full，
+             * 如果加了@Bean，@Component，@ComponentScan，@Import，@ImportResource这些注解，则属性的key标记为lite。
              * lite和full均表示这个BeanDefinition对应的类是一个配置类。
              */
-            // beanDef == appconfig
+            // beanDef == appconfig，  条件断点debug:beanName.equals("appConfig")
 			else if (ConfigurationClassUtils.checkConfigurationClassCandidate(beanDef, this.metadataReaderFactory)) {
-				configCandidates.add(new BeanDefinitionHolder(beanDef, beanName));
+				//将加了注解的bd放入一个list集合中，等待后面解析, 这里目前只有一个appConfig配置类
+			    configCandidates.add(new BeanDefinitionHolder(beanDef, beanName));
 			}
 		}
 
 		// Return immediately if no @Configuration classes were found
+        // 如果没有找到@Configuration配置类，则立即返回
 		if (configCandidates.isEmpty()) {
 			return;
 		}
@@ -316,13 +327,14 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 		});
 
 		// Detect any custom bean name generation strategy supplied through the enclosing application context
+        // 检测通过应用程序上下文提供的任何自定义 bean 名称生成策略
 		SingletonBeanRegistry sbr = null;
         // 如果BeanDefinitionRegistry是SingletonBeanRegistry子类的话,
         // 由于我们当前传入的是DefaultListableBeanFactory,是SingletonBeanRegistry 的子类
         // 因此会将registry强转为SingletonBeanRegistry
 		if (registry instanceof SingletonBeanRegistry) {
 			sbr = (SingletonBeanRegistry) registry;
-			if (!this.localBeanNameGeneratorSet) {//是否有自定义的
+			if (!this.localBeanNameGeneratorSet) {//是否有自定义的 bean 名称生成策略
                 // beanName的生成器，因为后面会扫描出所有加入到spring容器中calss类，然后把这些class
                 // 解析成BeanDefinition类，此时需要利用BeanNameGenerator为这些BeanDefinition生成beanName
 				BeanNameGenerator generator = (BeanNameGenerator) sbr.getSingleton(
@@ -348,7 +360,8 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 
         //实例化2个set集合,candidates用于将之前加入的configCandidates进行去重
         //因为可能有多个配置类重复了
-        //alreadyParsed用于判断是否处理过
+        //candidates里面存放未解析的bd
+        //alreadyParsed存放解析过的bd
 		Set<BeanDefinitionHolder> candidates = new LinkedHashSet<>(configCandidates);
 		Set<ConfigurationClass> alreadyParsed = new HashSet<>(configCandidates.size());
 		do {
@@ -358,8 +371,8 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
             // 通过其他注解(例如@Import、@Bean)的方式，在parse()方法这一步并不会将其解析为BeanDefinition放入到BeanDefinitionMap中，而是先解析成ConfigurationClass类
             // 真正放入到map中是在下面的this.reader.loadBeanDefinitions()方法中实现的
             // parse()方法需要一个参数，参数candidates是一个集合，集合中的元素个数由我们写的这一行代码决定：AnnotationConfigApplicationContext ac = new AnnotationConfigApplicationContext(AppConfig.class);
-			parser.parse(candidates);
-			parser.validate();
+			parser.parse(candidates);//解析
+			parser.validate();//验证如果要cglib代理的话，条件是否满足
 
 			Set<ConfigurationClass> configClasses = new LinkedHashSet<>(parser.getConfigurationClasses());
 			configClasses.removeAll(alreadyParsed);

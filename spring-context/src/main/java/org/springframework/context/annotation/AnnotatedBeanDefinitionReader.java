@@ -261,7 +261,7 @@ public class AnnotatedBeanDefinitionReader {
 			@Nullable BeanDefinitionCustomizer[] customizers) {
 
         /**
-         * 根据指定的bean通过构造方法的方式创建一个AnnotatedGenericBeanDefinition
+         * 根据指定的bean通过BeanDefinition构造方法的方式创建一个AnnotatedGenericBeanDefinition，这样就可以将bean转换成对应的bd
          * 这个AnnotatedGenericBeanDefinition可以理解为一个数据结构
          * AnnotatedGenericBeanDefinition包含了类的其他信息,比如一些元信息
          * scope，lazy等等

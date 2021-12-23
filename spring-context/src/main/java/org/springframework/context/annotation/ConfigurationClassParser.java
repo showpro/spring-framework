@@ -347,7 +347,11 @@ class ConfigurationClassParser {
 		// Process any @Import annotations
         // 4.处理@Import注解注册的bean，这一步只会将import注册的bean变为ConfigurationClass,不会变成BeanDefinition
         // 而是在loadBeanDefinitions()方法中变成BeanDefinition，再放入到BeanDefinitionMap中
-        // 关于Import注解,后面会单独写文章介绍
+        // 关于Import注解,（类的3种情况：普通类、实现了ImportSelector接口的类，实现了ImportBeanDefinitionRegistrar接口类）
+
+        // 实现ImportBeanDefinitionRegistrar接口类可以参与BeanFactory的建设，它可以暴露工厂的Map,这样我们就可以往Map中动态地添加一个bean。
+        // 我们为spring提供类有哪几种方法呢？1、register(xxx.class); 2、scan()扫描类; 3、ImportBeanDefinitionRegistrar
+        // 1和2两种需要的是一个类，类变成BeanDefinition的过程我们是无法参与的，而3是可以参与BeanDefinition的，有什么好处呢？@MapperScan注解原理
 		processImports(configClass, sourceClass, getImports(sourceClass), filter, true);
 
 		// Process any @ImportResource annotations

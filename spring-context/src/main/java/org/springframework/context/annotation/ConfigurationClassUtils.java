@@ -50,19 +50,24 @@ import org.springframework.stereotype.Component;
  */
 abstract class ConfigurationClassUtils {
 
+    //configuration class如果是@Configuration注解标注的类,则属性attribute的key标注为full
 	public static final String CONFIGURATION_CLASS_FULL = "full";
 
+    //非@Configuration注解标注的类（@Component、@Import等注解标注）,属性attribute的keykey标注为lite
 	public static final String CONFIGURATION_CLASS_LITE = "lite";
 
+    //即属性attribute的value值：org.springframework.context.annotation.ConfigurationClassPostProcessor。属性attribute的key设置为configurationClass
 	public static final String CONFIGURATION_CLASS_ATTRIBUTE =
 			Conventions.getQualifiedAttributeName(ConfigurationClassPostProcessor.class, "configurationClass");
 
+    //即属性attribute的value值：org.springframework.context.annotation.ConfigurationClassPostProcessor。属性attribute的key设置为order
 	private static final String ORDER_ATTRIBUTE =
 			Conventions.getQualifiedAttributeName(ConfigurationClassPostProcessor.class, "order");
 
 
 	private static final Log logger = LogFactory.getLog(ConfigurationClassUtils.class);
 
+	// 字典，存储标注配置类的注解
     // candidateIndicators 是一个静态常量，在初始化时，包含了四个元素
     // 分别为@Component,@ComponentScan,@Import,@ImportResource这四个注解
     // 只要这个类上添加了这四种注解中的一个，就便是这个类是一个配置类，
@@ -79,6 +84,8 @@ abstract class ConfigurationClassUtils {
 
 
 	/**
+     * 检查给定的bean定义是否是配置类（或在configuration/component类中声明的嵌套组件类，也要自动注册）的候选项，并相应地标记它。
+     *
 	 * Check whether the given bean definition is a candidate for a configuration class
 	 * (or a nested component class declared within a configuration/component class,
 	 * to be auto-registered as well), and mark it accordingly.
@@ -89,19 +96,23 @@ abstract class ConfigurationClassUtils {
 	public static boolean checkConfigurationClassCandidate(
 			BeanDefinition beanDef, MetadataReaderFactory metadataReaderFactory) {
 
+	    //bean的类名
 		String className = beanDef.getBeanClassName();
 		if (className == null || beanDef.getFactoryMethodName() != null) {
 			return false;
 		}
 
+		// 判断BeanDefinition是不是加了注解？加了什么注解？
 		AnnotationMetadata metadata;
+		// 1、如果加了注解，通过第1个if拿bd的元素据信息
 		if (beanDef instanceof AnnotatedBeanDefinition &&
 				className.equals(((AnnotatedBeanDefinition) beanDef).getMetadata().getClassName())) {
 			// Can reuse the pre-parsed metadata from the given BeanDefinition...
-            // 如果BeanDefinition 是 AnnotatedBeanDefinition的实例,并且className 和 BeanDefinition中 的元数据 的类名相同
+            // 如果BeanDefinition 是 AnnotatedBeanDefinition的实例,即加了注解,并且className 和 BeanDefinition中 的元数据 的类名相同
             // 则直接从BeanDefinition 获得Metadata
 			metadata = ((AnnotatedBeanDefinition) beanDef).getMetadata();
 		}
+        // 2、如果没有加注解，通过第2个if拿bd的元素据信息
 		else if (beanDef instanceof AbstractBeanDefinition && ((AbstractBeanDefinition) beanDef).hasBeanClass()) {
 			// Check already loaded Class if present...
 			// since we possibly can't even load the class file for this Class.
@@ -131,19 +142,19 @@ abstract class ConfigurationClassUtils {
 		}
 
         /**
-         *  Full 全模式，Lite 轻量级模式
+         *  full 全模式，lite 轻量级模式
          *
          *  注解@Configuration(proxyBeanMethods = false)
          *
-         *  Full(proxyBeanMethods = true) :proxyBeanMethods参数设置为true时即为：Full 全模式。
+         *  lull(proxyBeanMethods = true) :proxyBeanMethods参数设置为true时即为：Full 全模式。
          *  该模式下注入容器中的同一个组件无论被取出多少次都是同一个bean实例，即单实例对象，
          *  在该模式下SpringBoot每次启动都会判断检查容器中是否存在该组件
          *
-         *  Lite(proxyBeanMethods = false) :proxyBeanMethods参数设置为false时即为：Lite 轻量级模式。
+         *  lite(proxyBeanMethods = false) :proxyBeanMethods参数设置为false时即为：Lite 轻量级模式。
          *  该模式下注入容器中的同一个组件无论被取出多少次都是不同的bean实例，即多实例对象，
          *  在该模式下SpringBoot每次启动会跳过检查容器中是否存在该组件
          *
-         *  什么时候用Full全模式，什么时候用Lite轻量级模式？
+         *  什么时候用full全模式，什么时候用lite轻量级模式？
          *  当在你的同一个Configuration配置类中，注入到容器中的bean实例之间有依赖关系时，建议使用Full全模式
          *  当在你的同一个Configuration配置类中，注入到容器中的bean实例之间没有依赖关系时，建议使用Lite轻量级模式，以提高springboot的启动速度和性能
          *
@@ -162,12 +173,12 @@ abstract class ConfigurationClassUtils {
 		Map<String, Object> config = metadata.getAnnotationAttributes(Configuration.class.getName());
 		if (config != null && !Boolean.FALSE.equals(config.get("proxyBeanMethods"))) {
             //如果存在Configuration 注解,且注解中的方法=false(即没有使用代理)
-            // 则为BeanDefinition 设置configurationClass属性为Full模式，则spring认为他是一个全注解的类
+            // 则为BeanDefinition 设置configurationClass属性为full模式，表示这个bd我们标记过了，则spring认为他是一个全注解的类
 			beanDef.setAttribute(CONFIGURATION_CLASS_ATTRIBUTE, CONFIGURATION_CLASS_FULL);
 		}
 		else if (config != null || isConfigurationCandidate(metadata)) {
             //如果存在Configuration 注解 或者 判断是否含有@Bean,@Component,@ComponentScan,@Import,@ImportResource注解，摘录isConfigurationCandidate的源码
-            // 则设置BeanDefinition属性为Lite,spring则认为是一个部分注解类
+            // 则设置BeanDefinition属性为lite,spring则认为是一个部分注解类
 			beanDef.setAttribute(CONFIGURATION_CLASS_ATTRIBUTE, CONFIGURATION_CLASS_LITE);
 		}
 		else {
